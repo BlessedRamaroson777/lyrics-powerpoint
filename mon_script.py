@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
 import os
+import threading
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 from pptx import Presentation
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.enum.shapes import MSO_SHAPE
 from pptx.dml.color import RGBColor
-from pptx.util import Pt
+from pptx.util import Pt, Inches
 from datetime import date
 
-# ---------- Couleurs du thème rose pâle ----------
-BG_COLOR = "#FFF0F5"  # Rose lavande
-BUTTON_COLOR = "#FFD1DC"  # Rose pâle
-BUTTON_HOVER = "#FFC0CB"  # Rose plus soutenu
-TEXT_COLOR = "#8B4789"  # Violet doux
-ENTRY_BG = "#FFFFFF"  # Blanc
+# ---------- Couleurs du thème ----------
+BG_COLOR = "#F5F1EA"  # Ivoire chaud
+BUTTON_COLOR = "#D95F5F"  # Corail
+BUTTON_HOVER = "#C64F4F"  # Corail foncé
+TEXT_COLOR = "#243447"  # Bleu-gris profond
+ENTRY_BG = "#FFFDF9"  # Blanc cassé
+PPT_BG = "#F6F1EA"
+PPT_PANEL = "#FFFDF9"
+PPT_ACCENT = "#D95F5F"
+PPT_ACCENT_2 = "#2F4B7C"
+PPT_TEXT = "#243447"
 
 # ---------- Fonctions Utilitaires ----------
 def get_unique_filename(base="Chorale", ext=".pptx"):
@@ -32,6 +39,62 @@ def split_block_recursive(block, max_lines=12):
     mid = len(block) // 2
     return split_block_recursive(block[:mid], max_lines) + split_block_recursive(block[mid:], max_lines)
 
+def hex_to_rgb(color_code):
+    return RGBColor.from_string(color_code.replace("#", ""))
+
+def add_styled_slide(prs, lines):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    background = slide.background.fill
+    background.solid()
+    background.fore_color.rgb = hex_to_rgb(PPT_BG)
+
+    top_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, Inches(0.58))
+    top_bar.fill.solid()
+    top_bar.fill.fore_color.rgb = hex_to_rgb(PPT_ACCENT)
+    top_bar.line.fill.background()
+
+    left_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.42), Inches(1.1), Inches(0.14), Inches(4.7))
+    left_bar.fill.solid()
+    left_bar.fill.fore_color.rgb = hex_to_rgb(PPT_ACCENT_2)
+    left_bar.line.fill.background()
+
+    decorative = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(8.55), Inches(5.9), Inches(1.55), Inches(1.55))
+    decorative.fill.solid()
+    decorative.fill.fore_color.rgb = hex_to_rgb(PPT_ACCENT_2)
+    decorative.line.fill.background()
+
+    panel = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.82), Inches(0.98), Inches(8.45), Inches(5.0))
+    panel.fill.solid()
+    panel.fill.fore_color.rgb = hex_to_rgb(PPT_PANEL)
+    panel.line.color.rgb = hex_to_rgb(PPT_ACCENT)
+    panel.line.width = Pt(1.5)
+
+    text_box = slide.shapes.add_textbox(Inches(1.25), Inches(1.35), Inches(7.7), Inches(4.3))
+    text_frame = text_box.text_frame
+    text_frame.clear()
+    text_frame.word_wrap = True
+    text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+    font_size = 32
+    if len(lines) > 4:
+        font_size = 28
+    if len(lines) > 7:
+        font_size = 24
+
+    for index, line in enumerate(lines):
+        paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
+        paragraph.text = line
+        paragraph.alignment = PP_ALIGN.CENTER
+        if paragraph.runs:
+            run = paragraph.runs[0]
+            run.font.size = Pt(font_size)
+            run.font.bold = False
+            run.font.color.rgb = hex_to_rgb(PPT_TEXT)
+            run.font.name = "Arial"
+
+    return slide
+
 def generate_pptx_from_lines(lines, max_lines=12):
     prs = Presentation()
     block = []
@@ -41,20 +104,7 @@ def generate_pptx_from_lines(lines, max_lines=12):
         if line == "" and block:
             small_blocks = split_block_recursive(block, max_lines)
             for b in small_blocks:
-                slide = prs.slides.add_slide(prs.slide_layouts[0])
-                title_placeholder = slide.shapes.title
-                title_placeholder.text = "\n".join(b)
-                text_frame = title_placeholder.text_frame
-                text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-                for p in text_frame.paragraphs:
-                    p.alignment = PP_ALIGN.LEFT
-                    run = p.runs[0]
-                    run.font.size = Pt(38)
-                    run.font.bold = False
-                    run.font.color.rgb = RGBColor(139, 71, 137)  # Violet doux
-                fill = slide.background.fill
-                fill.solid()
-                fill.fore_color.rgb = RGBColor(255, 240, 245)  # Rose lavande
+                add_styled_slide(prs, b)
             block = []
         else:
             block.append(line)
@@ -62,20 +112,7 @@ def generate_pptx_from_lines(lines, max_lines=12):
     if block:
         small_blocks = split_block_recursive(block, max_lines)
         for b in small_blocks:
-            slide = prs.slides.add_slide(prs.slide_layouts[0])
-            title_placeholder = slide.shapes.title
-            title_placeholder.text = "\n".join(b)
-            text_frame = title_placeholder.text_frame
-            text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-            for p in text_frame.paragraphs:
-                p.alignment = PP_ALIGN.LEFT
-                run = p.runs[0]
-                run.font.size = Pt(38)
-                run.font.bold = False
-                run.font.color.rgb = RGBColor(139, 71, 137)  # Violet doux
-            fill = slide.background.fill
-            fill.solid()
-            fill.fore_color.rgb = RGBColor(255, 240, 245)  # Rose lavande
+            add_styled_slide(prs, b)
 
     filename = get_unique_filename()
     prs.save(filename)
@@ -106,6 +143,27 @@ def on_enter(e):
 def on_leave(e):
     e.widget['background'] = BUTTON_COLOR
 
+def show_success_popup(pptx_path):
+    popup = tk.Toplevel(root)
+    popup.title("Succès")
+    popup.geometry("400x200")
+    popup.configure(bg=BG_COLOR)
+    tk.Label(popup, text="PowerPoint créé !", font=("Arial", 14, "bold"), bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=20)
+    tk.Label(popup, text=f"Fichier : {os.path.basename(pptx_path)}", bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=10)
+
+    btn_frame = tk.Frame(popup, bg=BG_COLOR)
+    btn_frame.pack(pady=10)
+
+    tk.Button(btn_frame, text="Ouvrir", command=lambda: os.startfile(pptx_path),
+              bg=BUTTON_COLOR, fg="white", relief="flat", padx=15, pady=5,
+              font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
+    tk.Button(btn_frame, text="Fermer", command=popup.destroy,
+              bg=BUTTON_COLOR, fg="white", relief="flat", padx=15, pady=5,
+              font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
+
+def show_error_popup(message):
+    messagebox.showerror("Erreur", message)
+
 def output_file(lines):
     # Fenêtre de chargement
     loading_popup = tk.Toplevel(root)
@@ -119,26 +177,29 @@ def output_file(lines):
     progress.start()
     loading_popup.update()
 
-    pptx_path = generate_pptx_from_lines(lines, max_lines=8)
-    loading_popup.destroy()
+    result = {"path": None, "error": None}
 
-    # Fenêtre succès
-    popup = tk.Toplevel(root)
-    popup.title("Succès")
-    popup.geometry("400x200")
-    popup.configure(bg=BG_COLOR)
-    tk.Label(popup, text="✅ PowerPoint créé !", font=("Arial", 14, "bold"), bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=20)
-    tk.Label(popup, text=f"Fichier : {os.path.basename(pptx_path)}", bg=BG_COLOR, fg=TEXT_COLOR).pack(pady=10)
-    
-    btn_frame = tk.Frame(popup, bg=BG_COLOR)
-    btn_frame.pack(pady=10)
-    
-    tk.Button(btn_frame, text="Ouvrir", command=lambda: os.startfile(pptx_path), 
-              bg=BUTTON_COLOR, fg=TEXT_COLOR, relief="flat", padx=15, pady=5,
-              font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
-    tk.Button(btn_frame, text="Fermer", command=popup.destroy, 
-              bg=BUTTON_COLOR, fg=TEXT_COLOR, relief="flat", padx=15, pady=5,
-              font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
+    def worker():
+        try:
+            result["path"] = generate_pptx_from_lines(lines, max_lines=8)
+        except Exception as exc:
+            result["error"] = exc
+
+    def poll_worker():
+        if worker_thread.is_alive():
+            root.after(100, poll_worker)
+            return
+
+        loading_popup.destroy()
+        if result["error"] is not None:
+            show_error_popup(f"Impossible de créer le PowerPoint : {result['error']}")
+            return
+
+        show_success_popup(result["path"])
+
+    worker_thread = threading.Thread(target=worker, daemon=True)
+    worker_thread.start()
+    poll_worker()
 
 # ---------- Interface ----------
 root = tk.Tk()
